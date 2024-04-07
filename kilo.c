@@ -3,18 +3,28 @@
 #include <termios.h>
 #include <stdlib.h>
 #include <ctype.h>
+#include <errno.h>
 
 struct termios origTermios;
 
+void die(const char* s) {
+  perror(s);
+  exit(1);
+}
+
 void disableRawMode() {
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &origTermios);
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &origTermios) == -1) {
+    die("tcsetattr");
+  }
 }
 
 // turn off echoing in the terminal
 void enableRawMode() {
 
   // read original (no echo) terminal attributes into a struct
-  tcgetattr(STDIN_FILENO, &origTermios);
+  if (tcgetattr(STDIN_FILENO, &origTermios) == -1) {
+    die("setattr");
+  }
   atexit(disableRawMode);
   struct termios raw = origTermios;
 
@@ -40,7 +50,9 @@ int main() {
   enableRawMode();
   while (1) {
     char c = '\0';
-    read(STDIN_FILENO, &c, 1);
+    if (read(STDIN_FILENO, &c, 1) == -1 && errno != EAGAIN) {
+      die("read");
+    }
     if (iscntrl(c)) {
       printf("%d\r\n", c);
     } else {
@@ -52,3 +64,4 @@ int main() {
   }
   return 0;
 }
+
