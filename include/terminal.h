@@ -14,5 +14,9 @@ void enableRawMode();
 char editorReadKey();
 void editorProcessKeypress();
 void editorRefreshScreen();
+void editorDrawRows();
+int getWindowSize();
+void initEditor();
+int getCursorPosition();
 
 #endif // TERMINAL_H

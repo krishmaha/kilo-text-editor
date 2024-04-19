@@ -3,17 +3,28 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
+#include <sys/ioctl.h>
+
 #include "terminal.h"
 
-struct termios origTermios;
+struct editorConfig {
+  int screenrows;
+  int screencols;
+  struct termios origTermios;
+};
+
+struct editorConfig E;
+
 
 void die(const char* s) {
+  write(STDOUT_FILENO, "\x1b[2J", 4);
+  write(STDOUT_FILENO, "\x1b[H", 3);
   perror(s);
   exit(1);
 }
 
 void disableRawMode() {
-  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &origTermios) == -1) {
+  if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.origTermios) == -1) {
     die("tcsetattr");
   }
 }
@@ -22,11 +33,12 @@ void disableRawMode() {
 void enableRawMode() {
 
   // read original (no echo) terminal attributes into a struct
-  if (tcgetattr(STDIN_FILENO, &origTermios) == -1) {
+  if (tcgetattr(STDIN_FILENO, &E.origTermios) == -1) {
     die("tcgetattr");
   };
   atexit(disableRawMode);
-  struct termios raw = origTermios;
+
+  struct termios raw = E.origTermios;
 
   // turns off echo and canonical so we read input byte by byte rather 
   // than line by line. Also allows keypresses that would otherwise terminate program
@@ -62,11 +74,49 @@ void editorProcessKeypress() {
   char c = editorReadKey();
   switch (c) {
     case CTRL_KEY('q'):
+      // Using atexit() to clear screen when program exits would erase the message 
+      // printed by die straight away after printing
+      write(STDOUT_FILENO, "\x1b[2J", 4);
+      write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
       break;
   }
 }
 
 void editorRefreshScreen() {
+  // Clear entire screen
+  // Escape sequence is 4 bytes long - write 4 bytes out to terminal
   write(STDOUT_FILENO, "\x1b[2J", 4);
+  // Positions the cursor (using H command) to top left of screen
+  // No arguments specified for row and col e.g. (<esc>[12;40H) defaults to top left
+  write(STDOUT_FILENO, "\x1b[H", 3);
+  editorDrawRows();
+  write(STDOUT_FILENO, "\x1b[H", 3);
+}
+
+void editorDrawRows() {
+  int y;
+  for (y = 0; y < E.screenrows; y++) {
+    // Print tildes (~) in each row like Vim 
+    write(STDOUT_FILENO, "~\r\n", 3);
+  }
+}
+
+int getWindowSize(int *rows, int *cols) {
+  struct winsize ws;
+  // TIOCGWINSZ: terminal IOCtl get window size
+  // Get size of the terminal window
+  if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0) {
+    return -1;
+  } else {
+    *cols = ws.ws_col;
+    *rows = ws.ws_row;
+    return 0;
+  }
+}
+
+void initEditor() {
+  if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
+    die("getWindowSize");
+  }
 }
