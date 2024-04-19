@@ -1,14 +1,11 @@
 #include <stdio.h>
 #include <unistd.h>
-// #include <termios.h>
 #include <stdlib.h>
 #include <ctype.h>
 #include <errno.h>
-
 #include "terminal.h"
 
-
-// struct termios origTermios;
+struct termios origTermios;
 
 void die(const char* s) {
   perror(s);
@@ -47,4 +44,29 @@ void enableRawMode() {
   // written and discarding unread input
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
   
+}
+
+
+char editorReadKey() {
+  int nread;
+  char c;
+  while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
+    if (nread == -1 && errno != EAGAIN) {
+      die("read");
+    } 
+  }
+  return c;
+}
+
+void editorProcessKeypress() {
+  char c = editorReadKey();
+  switch (c) {
+    case CTRL_KEY('q'):
+      exit(0);
+      break;
+  }
+}
+
+void editorRefreshScreen() {
+  write(STDOUT_FILENO, "\x1b[2J", 4);
 }
